@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
 import { PrismaClient } from '@prisma/client/edge'
 import { withAccelerate } from '@prisma/extension-accelerate'
-import { jwt, sign } from 'hono/jwt'
+import { jwt, sign, verify } from 'hono/jwt'
+import { bodyLimit } from 'hono/body-limit'
 
 const app = new Hono<{
   Bindings: {
@@ -10,17 +11,32 @@ const app = new Hono<{
   }
 }>()
 
+
+//Middleware, get the header, verify it, if verified proceed to the next code, if not throw 403
+app.use('/api/v1/blog/*', async (c, next) => {
+  const header = c.req.header("authorization") || "";
+
+  const response = await verify(header, c.env.JWT_SECRET)
+  if (response.id) {
+    next()
+  } else {
+    c.status(403)
+    return c.json({error: "unauthorized"})
+  }
+})
+
 app.post('/api/v1/signup', async (c) => {
+  const body = await c.req.json();
   const prisma = new PrismaClient({
     datasourceUrl: c.env.DATABASE_URL,
   }).$extends(withAccelerate());
 
-  const body = await c.req.json();
   try{
     const user = await prisma.user.create({
       data: {
         email: body.email,
-        password: body.password
+        password: body.password,
+        name: body.name
       }
     })
 
@@ -36,26 +52,34 @@ app.post('/api/v1/signup', async (c) => {
 })
 
 app.post('/api/v1/signin', async (c) => {
+  const body = await c.req.json();
   const prisma = new PrismaClient({
     datasourceUrl: c.env.DATABASE_URL,
   }).$extends(withAccelerate());
 
-  const body = await c.req.json();
-
-  const user = await prisma.user.findUnique({
-    where: {
-      email: body.email,
-      password: body.password
+  try {
+    const user = await prisma.user.findFirst({
+      where: {
+        email: body.email,
+        password: body.password
+      }
+    })
+    if (!user) {
+      c.status(403);
+      return c.json({
+        message: "Incorrect creds"
+      })
     }
-  });
-
-  if(!user) {
-    c.status(403);
-    return c.json({error:"user nor found"});
+    const jwt = await sign({
+      id: user.id
+    }, c.env.JWT_SECRET);
+    return c.json({
+      jwt: jwt
+    })
+  }catch(e) {
+    c.status(411);
+    return c.json({error:"Invalid"})
   }
-  
-  const jwt = await sign({id: user.id}, c.env.JWT_SECRET);
-  return c.json({jwt})
 })
 
 app.post('/api/v1/blog', (c) => {
