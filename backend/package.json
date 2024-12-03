@@ -5,11 +5,11 @@
     "deploy": "wrangler deploy --minify"
   },
   "dependencies": {
+    "@akshathotcode/medium-common": "^1.0.2",
     "@prisma/client": "^5.22.0",
     "@prisma/extension-accelerate": "^1.2.1",
     "hono": "^4.6.11",
-    "prisma": "^5.22.0",
-    "zod": "^3.23.8"
+    "prisma": "^5.22.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241112.0",
